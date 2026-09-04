@@ -68,7 +68,7 @@ def format_division(df:pd.DataFrame) -> pd.DataFrame:
         'Neuropathology':'NP',
     }
     df['Q1'] = df['Q1'].str.replace(map)
-    df['Q1'] = df['Q1'].str.replace(',',' + ')
+    # df['Q1'] = df['Q1'].str.replace(',',' + ')
     return df
 
 def plot_respondents_by_division_role(
@@ -96,6 +96,11 @@ def plot_respondents_by_division_role(
     # Keep respondents with both division and role reported
     df_plot = df[[division_col, role_col]].dropna().copy()
 
+    # Split multi-select responses and explode into individual rows
+    df_plot[division_col] = df_plot[division_col].str.split(',')
+
+    df_plot = df_plot.explode(division_col)
+
     # Count respondents by division and role
     counts = (
         df_plot
@@ -121,7 +126,7 @@ def plot_respondents_by_division_role(
 
     # Formatting
     ax.set_xlabel('Number of Respondents')
-    ax.set_ylabel('Division')
+    ax.set_ylabel('Division (multiple allowed)')
     # ax.set_title('OIDS Needs Assessment Respondents by Division and Primary Role')
 
     ax.legend(
@@ -159,3 +164,98 @@ if __name__ == "__main__":
     df = main()
 # %%
 
+dff = df.groupby(['Q1','Q3']).agg(
+    num_respondents=pd.NamedAgg(column='ResponseId', aggfunc=pd.Series.nunique)
+)
+dff.reset_index()
+
+#%%
+def plot_q3_by_division(
+    df: pd.DataFrame,
+    division_col: str = 'Q1',
+    question_col: str = 'Q3',
+) -> None:
+    """
+    Plot individual Q3 responses, broken out by division.
+
+    Q3 is a multi-response question with selections separated by commas.
+    Each individual selection is counted separately.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Survey data.
+    division_col : str, optional
+        Column containing division, by default 'Q1'.
+    question_col : str, optional
+        Column containing Q3 responses, by default 'Q3'.
+
+    Returns
+    -------
+    None
+    """
+
+    # Keep responses with both Q3 and division reported
+    df_plot = df[[question_col, division_col]].dropna().copy()
+
+    # Split multi-select responses and explode into individual rows
+    df_plot[question_col] = df_plot[question_col].str.split(',')
+
+    df_plot = df_plot.explode(question_col)
+
+    # Remove whitespace around individual responses
+    df_plot[question_col] = df_plot[question_col].str.strip()
+
+    # Remove empty responses, if present
+    df_plot = df_plot.loc[df_plot[question_col] != '']
+
+    # Count each individual response by division
+    counts = (
+        df_plot
+        .groupby([question_col, division_col])
+        .size()
+        .unstack(fill_value=0)
+    )
+
+    # Sort Q3 responses by total number of selections
+    counts = counts.loc[
+        counts.sum(axis=1).sort_values(ascending=True).index
+    ]
+
+    # Colorblind-safe palette
+    palette = sns.color_palette(
+        'colorblind',
+        n_colors=len(counts.columns),
+    )
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(10, 7))
+
+    counts.plot(
+        kind='barh',
+        stacked=True,
+        ax=ax,
+        color=palette,
+        width=0.9,
+    )
+
+    # Formatting
+    ax.set_xlabel('Number of Respondents')
+    ax.set_ylabel('')
+    ax.set_title('Q3 Responses by Division')
+
+    ax.legend(
+        title='Division',
+        bbox_to_anchor=(0.5, 1.02),
+        loc='lower center',
+        ncol=len(counts.columns),
+        frameon=False,
+    )
+
+    sns.despine()
+
+    fig.tight_layout()
+    plt.show()
+
+plot_q3_by_division(df)
+# %%
