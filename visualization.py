@@ -257,7 +257,121 @@ def plot_q3_by_division(
     fig.tight_layout()
     plt.show()
 
-plot_q3_by_division(df)
+
+def format_q4(df: pd.DataFrame, question_col: str = 'Q4') -> pd.DataFrame:
+    """
+    Format the Q4 responses in the survey DataFrame.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame containing the survey data.
+    question_col : str, optional
+        Column containing Q4 responses, by default 'Q4'.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with formatted Q4 responses.
+    """
+    map = {
+        'Research Information Services (RIS)': 'RIS',
+        'EPIC or COGITO or Lab IS': 'EPIC/COGITO/Lab IS',
+        "LGM Informatics ('CP Informatics')":'CP Informatics',
+        'Informatics, Data Science & Biostatistics (I2DB)': 'I2DB',
+        'WashU Informatics Core Services':'WU Informatics Core',
+        'Center for Translational Bioinformatics (CTBI)': 'CTBI',
+        'Center for Biostatistics and Data Science (CBDS)': 'CBDS',
+        'Local divisional services': 'Divisional services'
+    }
+    df[question_col] = df[question_col].str.replace(map)
+    return df
+
+
+def plot_q4_by_division(
+    df: pd.DataFrame,
+    division_col: str = 'Q1',
+    question_col: str = 'Q4',
+) -> None:
+    """
+    Plot individual Q4 responses, broken out by division.
+
+    Q4 is a multi-response question with selections separated by commas.
+    Each individual selection is counted separately.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Survey data.
+    division_col : str, optional
+        Column containing division, by default 'Q1'.
+    question_col : str, optional
+        Column containing Q4 responses, by default 'Q4'.
+
+    Returns
+    -------
+    None
+    """
+
+    # Keep responses with both Q4 and division reported
+    df_plot = df[[question_col, division_col]].dropna().copy()
+
+    # Split multi-select responses and explode into individual rows
+    df_plot[question_col] = df_plot[question_col].str.split(',')
+
+    df_plot = df_plot.explode(question_col)
+
+    # Remove whitespace around individual responses
+    df_plot[question_col] = df_plot[question_col].str.strip()
+
+    # Remove empty responses, if present
+    df_plot = df_plot.loc[df_plot[question_col] != '']
+
+    # Count each individual response by division
+    counts = (
+        df_plot
+        .groupby([question_col, division_col])
+        .size()
+        .unstack(fill_value=0)
+    )
+
+    # Sort Q4 responses by total number of selections
+    counts = counts.loc[
+        counts.sum(axis=1).sort_values(ascending=True).index
+    ]
+
+    # Colorblind-safe palette
+    palette = sns.color_palette(
+        'colorblind',
+        n_colors=len(counts.columns),
+    )
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(7, 5))
+
+    counts.plot(
+        kind='barh',
+        stacked=True,
+        ax=ax,
+        color=palette,
+        width=0.9,
+    )
+
+    # Formatting
+    ax.set_xlabel('Number of Respondents')
+    ax.set_ylabel('Resources Used (multiple allowed)')
+
+    ax.legend(
+        title='Division',
+        bbox_to_anchor=(1.02, 1),
+        loc='upper left',
+        frameon=False,
+    )
+
+    sns.despine()
+
+    fig.tight_layout()
+    plt.show()
 # %%
 def main() -> pd.DataFrame:
     """
@@ -275,9 +389,14 @@ def main() -> pd.DataFrame:
     plot_respondents_by_division_role(df)
     format_curr_activities(df)
     plot_q3_by_division(df)
+    format_q4(df)
+    plot_q4_by_division(df)
     return df
 
 if __name__ == "__main__":
     df = main()
 
-# %%
+
+
+
+
