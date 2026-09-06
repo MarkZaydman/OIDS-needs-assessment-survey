@@ -125,7 +125,7 @@ def plot_respondents_by_division_role(
     )
 
     # Formatting
-    ax.set_xlabel('Number of Respondents')
+    ax.set_xlabel(f'Number of Respondents (# unique = {df["ResponseId"].nunique()})')
     ax.set_ylabel('Division (multiple allowed)')
     # ax.set_title('OIDS Needs Assessment Respondents by Division and Primary Role')
 
@@ -143,33 +143,34 @@ def plot_respondents_by_division_role(
     fig.tight_layout()
     plt.show()
 
-# %%
-def main() -> pd.DataFrame:
+
+def format_curr_activities(df: pd.DataFrame, column: str = 'Q3') -> pd.DataFrame:
     """
-    Main function to import and visualize OIDS Needs Assessment Survey Data.
+    Format the current activities column by splitting multi-select responses into individual rows.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Survey data.
+    column : str, optional
+        Column containing current activities, by default 'Q3'.
 
     Returns
     -------
-    df : pandas.DataFrame
-        DataFrame containing the survey data.
-
+    pd.DataFrame
+        DataFrame with individual current activities.
     """
-    # Import the survey data
-    df = import_data()
-    df = format_division(df)
-    plot_respondents_by_division_role(df)
+    map={
+        "Artificial intelligence / machine learning": "AI/ML",
+        "Bioinformatics": "Bioinformatics",
+        "Data collection, analysis, and visualization": "Data coll/analysis/vis",
+        "Software development and/or maintenance": "Software dev/maintenance"
+    }
+    df[column] = df[column].str.replace(map)
     return df
 
-if __name__ == "__main__":
-    df = main()
-# %%
 
-dff = df.groupby(['Q1','Q3']).agg(
-    num_respondents=pd.NamedAgg(column='ResponseId', aggfunc=pd.Series.nunique)
-)
-dff.reset_index()
 
-#%%
 def plot_q3_by_division(
     df: pd.DataFrame,
     division_col: str = 'Q1',
@@ -229,7 +230,7 @@ def plot_q3_by_division(
     )
 
     # Plot
-    fig, ax = plt.subplots(figsize=(10, 7))
+    fig, ax = plt.subplots(figsize=(7, 4))
 
     counts.plot(
         kind='barh',
@@ -241,14 +242,13 @@ def plot_q3_by_division(
 
     # Formatting
     ax.set_xlabel('Number of Respondents')
-    ax.set_ylabel('')
-    ax.set_title('Q3 Responses by Division')
+    ax.set_ylabel('Current Activities (multiple allowed)')
+    # ax.set_title('Q3 Responses by Division')
 
     ax.legend(
         title='Division',
-        bbox_to_anchor=(0.5, 1.02),
-        loc='lower center',
-        ncol=len(counts.columns),
+        bbox_to_anchor=(1.02, 1),
+        loc='upper left',
         frameon=False,
     )
 
@@ -258,4 +258,26 @@ def plot_q3_by_division(
     plt.show()
 
 plot_q3_by_division(df)
+# %%
+def main() -> pd.DataFrame:
+    """
+    Main function to import and visualize OIDS Needs Assessment Survey Data.
+
+    Returns
+    -------
+    df : pandas.DataFrame
+        DataFrame containing the survey data.
+
+    """
+    # Import the survey data
+    df = import_data()
+    df = format_division(df)
+    plot_respondents_by_division_role(df)
+    format_curr_activities(df)
+    plot_q3_by_division(df)
+    return df
+
+if __name__ == "__main__":
+    df = main()
+
 # %%
