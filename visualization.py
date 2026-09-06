@@ -485,6 +485,275 @@ def plot_q5_by_division(
     fig.tight_layout()
     plt.show()
 
+
+def plot_q7_likert_diverging(
+    df: pd.DataFrame,
+) -> None:
+    """
+    Plot Q7 as a diverging Likert chart.
+
+    The neutral/middle response ('Moderately') is centered on zero.
+    Half of the moderate responses extend to the left and half to the right.
+
+    Responses are normalized to percentages within each question.
+    """
+
+    question_map = {
+        'Q7_1': 'AI governance, guidance, and policy',
+        'Q7_2': 'AI education and consultation',
+        'Q7_3': 'Bioinformatics',
+        'Q7_4': 'Clinical application support',
+        'Q7_5': 'Clinical data access',
+        'Q7_6': 'Data analytics and visualization',
+        'Q7_7': 'Educational workshops',
+        'Q7_8': 'Shared computing infrastructure',
+        'Q7_9': 'Single point of entry for informatics and data science needs',
+        'Q7_10': 'Software/application development support',
+    }
+
+    likert_map = {
+        'Not valuable': 1,
+        'Slightly': 2,
+        'Moderately': 3,
+        'Very': 4,
+        'Essential': 5,
+    }
+
+    likert_labels = {
+        1: 'Not valuable',
+        2: 'Slightly',
+        3: 'Moderately',
+        4: 'Very',
+        5: 'Essential',
+    }
+
+    question_cols = list(question_map.keys())
+
+    # -------------------------------------------------------------------------
+    # Reshape data
+    # -------------------------------------------------------------------------
+
+    df_long = (
+        df[question_cols]
+        .rename(columns=question_map)
+        .melt(
+            var_name='Resource',
+            value_name='Response',
+        )
+        .dropna(subset=['Response'])
+    )
+
+    df_long['Response'] = (
+        df_long['Response']
+        .astype(str)
+        .str.strip()
+    )
+
+    df_long['Rating'] = df_long['Response'].map(likert_map)
+
+    df_long = df_long.dropna(subset=['Rating'])
+
+    df_long['Rating'] = df_long['Rating'].astype(int)
+
+    # -------------------------------------------------------------------------
+    # Calculate response percentages
+    # -------------------------------------------------------------------------
+
+    counts = (
+        df_long
+        .groupby(
+            ['Resource', 'Rating'],
+            observed=True,
+        )
+        .size()
+        .unstack(fill_value=0)
+        .reindex(columns=[1, 2, 3, 4, 5], fill_value=0)
+    )
+
+    percentages = (
+        counts
+        .div(counts.sum(axis=1), axis=0)
+        * 100
+    )
+
+    # -------------------------------------------------------------------------
+    # Calculate mean rating and sort
+    # -------------------------------------------------------------------------
+
+    means = (
+        df_long
+        .groupby('Resource')['Rating']
+        .mean()
+        .sort_values()
+    )
+
+    percentages = percentages.loc[means.index]
+    means = means.loc[percentages.index]
+
+    # -------------------------------------------------------------------------
+    # Diverging coordinates
+    #
+    # Moderate is split evenly around zero:
+    #
+    #  <------------ | ------------>
+    #   1    2    3  |  3    4    5
+    #
+    # -------------------------------------------------------------------------
+
+    p1 = percentages[1]
+    p2 = percentages[2]
+    p3 = percentages[3]
+    p4 = percentages[4]
+    p5 = percentages[5]
+
+    half_neutral = p3 / 2
+
+    # Blue -> neutral -> red
+    colors = sns.color_palette(
+        'RdBu_r',
+        n_colors=5,
+    )
+
+    # -------------------------------------------------------------------------
+    # Plot
+    # -------------------------------------------------------------------------
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    y = range(len(percentages))
+
+    # -------------------------
+    # Negative side
+    # -------------------------
+
+    # Moderately: left half
+    ax.barh(
+        y,
+        -half_neutral,
+        left=0,
+        color=colors[2],
+        height=0.8,
+    )
+
+    # Slightly
+    ax.barh(
+        y,
+        -p2,
+        left=-half_neutral,
+        color=colors[1],
+        height=0.8,
+    )
+
+    # Not valuable
+    ax.barh(
+        y,
+        -p1,
+        left=-(half_neutral + p2),
+        color=colors[0],
+        height=0.8,
+    )
+
+    # -------------------------
+    # Positive side
+    # -------------------------
+
+    # Moderately: right half
+    ax.barh(
+        y,
+        half_neutral,
+        left=0,
+        color=colors[2],
+        height=0.8,
+    )
+
+    # Very
+    ax.barh(
+        y,
+        p4,
+        left=half_neutral,
+        color=colors[3],
+        height=0.8,
+    )
+
+    # Essential
+    ax.barh(
+        y,
+        p5,
+        left=half_neutral + p4,
+        color=colors[4],
+        height=0.8,
+    )
+
+    # -------------------------------------------------------------------------
+    # Formatting
+    # -------------------------------------------------------------------------
+
+    ax.set_yticks(list(y))
+    ax.set_yticklabels(percentages.index)
+
+    ax.set_xlabel('Respondents (%)')
+    ax.set_ylabel('')
+
+    # Center line = midpoint of Moderate
+    ax.axvline(
+        0,
+        color='0.3',
+        linewidth=0.8,
+    )
+
+    # Make left/right range symmetric
+    max_extent = max(
+        (half_neutral + p2 + p1).max(),
+        (half_neutral + p4 + p5).max(),
+    )
+
+    # Round upward for cleaner axis limits
+    max_extent = min(
+        100,
+        ((max_extent // 10) + 1) * 10,
+    )
+
+    ax.set_xlim(-max_extent, max_extent)
+
+    # Show absolute values on x-axis
+    ticks = ax.get_xticks()
+
+    ax.set_xticks(ticks)
+    ax.set_xticklabels(
+        [f'{abs(x):.0f}' for x in ticks]
+    )
+
+    # -------------------------------------------------------------------------
+    # Legend
+    # -------------------------------------------------------------------------
+
+    from matplotlib.patches import Patch
+
+    legend_handles = [
+        Patch(
+            facecolor=colors[i],
+            label=likert_labels[i + 1],
+        )
+        for i in range(5)
+    ]
+
+    ax.legend(
+        handles=legend_handles,
+        title='Value',
+        bbox_to_anchor=(1.02, 1),
+        loc='upper left',
+        frameon=False,
+    )
+
+    sns.despine(
+        ax=ax,
+        left=False,
+    )
+
+    fig.tight_layout()
+
+    plt.show()
+
 # %%
 def main() -> pd.DataFrame:
     """
@@ -506,6 +775,7 @@ def main() -> pd.DataFrame:
     plot_q4_by_division(df)
     format_q5(df)
     plot_q5_by_division(df)
+    plot_q7_likert_diverging(df)
     return df
 
 if __name__ == "__main__":
@@ -513,4 +783,4 @@ if __name__ == "__main__":
 
 
 
-
+# %%
