@@ -372,6 +372,119 @@ def plot_q4_by_division(
 
     fig.tight_layout()
     plt.show()
+
+def format_q5(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Format Q5 responses by stripping whitespace and handling missing values.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Survey data.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with formatted Q5 responses.
+    """
+    map = {
+        'Limited knowledge or familiarity':'Limited knowledge',
+        'Clinical application support is insufficient':'Insuff clin app supp',
+        'Lack of computational resources (compute or storage)':'Lack of compute or storage',
+        'Difficulty obtaining clinical data or specimens':'Diff obtaining clin data or spec',
+        'Lack of data analysis or visualization support':'Lack of data analysis or viz supp',
+        'I have not experienced significant limitations':'No significant limitations',
+    }
+    df['Q5'] = df['Q5'].str.replace(map)
+    return df
+
+
+def plot_q5_by_division(
+    df: pd.DataFrame,
+    division_col: str = 'Q1',
+    question_col: str = 'Q5',
+) -> None:
+    """
+    Plot individual Q5 responses, broken out by division.
+
+    Q5 is a multi-response question with selections separated by commas.
+    Each individual selection is counted separately.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Survey data.
+    division_col : str, optional
+        Column containing division, by default 'Q1'.
+    question_col : str, optional
+        Column containing Q5 responses, by default 'Q5'.
+
+    Returns
+    -------
+    None
+    """
+
+    # Keep responses with both Q5 and division reported
+    df_plot = df[[question_col, division_col]].dropna().copy()
+
+    # Split multi-select responses
+    df_plot[question_col] = df_plot[question_col].str.split(',')
+
+    # Explode so each selection gets its own row
+    df_plot = df_plot.explode(question_col)
+
+    # Clean whitespace
+    df_plot[question_col] = df_plot[question_col].str.strip()
+
+    # Remove empty responses
+    df_plot = df_plot.loc[df_plot[question_col] != '']
+
+    # Count each response by division
+    counts = (
+        df_plot
+        .groupby([question_col, division_col])
+        .size()
+        .unstack(fill_value=0)
+    )
+
+    # Sort responses by total number of selections
+    counts = counts.loc[
+        counts.sum(axis=1).sort_values(ascending=True).index
+    ]
+
+    # Colorblind-safe palette
+    palette = sns.color_palette(
+        'colorblind',
+        n_colors=len(counts.columns),
+    )
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(7, 5))
+
+    counts.plot(
+        kind='barh',
+        stacked=True,
+        ax=ax,
+        color=palette,
+        width=0.9,
+    )
+
+    # Formatting
+    ax.set_xlabel('Number of Respondents')
+    ax.set_ylabel('Q5 Responses (multiple allowed)')
+
+    ax.legend(
+        title='Division',
+        bbox_to_anchor=(1.02, 1),
+        loc='upper left',
+        frameon=False,
+    )
+
+    sns.despine()
+
+    fig.tight_layout()
+    plt.show()
+
 # %%
 def main() -> pd.DataFrame:
     """
@@ -391,11 +504,12 @@ def main() -> pd.DataFrame:
     plot_q3_by_division(df)
     format_q4(df)
     plot_q4_by_division(df)
+    format_q5(df)
+    plot_q5_by_division(df)
     return df
 
 if __name__ == "__main__":
     df = main()
-
 
 
 
